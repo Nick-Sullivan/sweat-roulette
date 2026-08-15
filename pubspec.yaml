@@ -27,3 +27,24 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Bundled, not fetched — the app has to look right with no connection, so
+  # `google_fonts` (which downloads at runtime) is deliberately not used.
+  #
+  # BebasNeue is the display face: caps-only, one weight, gym-signage tall.
+  # Chivo carries everything Bebas can't — body copy, mixed-case titles, labels.
+  fonts:
+    - family: BebasNeue
+      fonts:
+        - asset: assets/fonts/BebasNeue-Regular.ttf
+          weight: 400
+    - family: Chivo
+      fonts:
+        - asset: assets/fonts/Chivo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Chivo-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Chivo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Chivo-Bold.ttf
+          weight: 700
