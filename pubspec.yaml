@@ -1,0 +1,29 @@
+name: sweat_roulette
+description: "Sweat Roulette"
+publish_to: 'none'
+
+# Vestigial for Play releases — CI always overrides both halves via
+# --build-name / --build-number. Used only by local builds.
+version: 0.1.0
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  go_router: ^17.0.0
+  shared_preferences: ^2.5.3
+  package_info_plus: ^9.0.1
+  # Not used directly — Flutter's Cupertino widgets reference this font family,
+  # and its absence makes every release build emit a missing-font warning.
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
