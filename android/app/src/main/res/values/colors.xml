@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors lib/theme/app_palette.dart. Android can't read Dart constants, so
+     these two are the only duplicated hex values in the project — change them
+     together with the palette. -->
+<resources>
+    <!-- SweatPalette.cognac — the adaptive icon's background layer. -->
+    <color name="ic_launcher_background">#A9673B</color>
+    <!-- SweatPalette.canvas — the launch screen, so the app's first frame
+         paints onto the same colour it started from. -->
+    <color name="splash_background">#121315</color>
+</resources>

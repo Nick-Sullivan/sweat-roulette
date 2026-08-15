@@ -1,9 +1,11 @@
 # Play Store listing content
 
 Everything to paste into Play Console → Store presence → Main store listing.
-Assets needed in this folder: `play_icon_512.png` (App icon, 512×512 PNG) and
-`feature_graphic.png` (Feature graphic, 1024×500). Screenshots: at least 2
-phone screenshots (see the bottom of this file).
+
+`play_icon_512.png` (App icon, 512×512) and `feature_graphic.png` (1024×500)
+are both generated — run `flutter test tool/generate_icons.dart` to redraw them
+from the plate-wheel painter rather than editing them by hand. Still needed:
+at least 2 phone screenshots (see the bottom of this file).
 
 Placeholder copy for now — rewrite once the app actually does something.
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../theme/app_spacing.dart';
+import '../../theme/brand/plate_wheel.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 
@@ -53,10 +54,11 @@ class _Masthead extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: SweatSpace.xl),
+        // The lockup: mark plus wordmark. The app bar already carries the name,
+        // so the mark is what this adds.
+        const PlateWheel(size: 72),
         const SizedBox(height: SweatSpace.lg),
-        // The wordmark proper: uppercase, widely tracked.
-        Text('SWEAT ROULETTE', style: context.sweatText.wordmark),
-        const SizedBox(height: SweatSpace.sm),
         Text(
           'Roll the day. Lift what lands.',
           style: theme.textTheme.bodyLarge?.copyWith(
