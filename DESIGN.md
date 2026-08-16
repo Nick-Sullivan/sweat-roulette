@@ -343,13 +343,39 @@ Two rules that are load-bearing rather than incidental:
 recorded as abandoned at the next launch — and if so, for how long afterwards.
 Recovery is what's built; the format supports either with no migration.
 
+### The catalogue — structured, but empty of real content
+
+[lib/exercises/data/exercise_catalogue.dart](lib/exercises/data/exercise_catalogue.dart)
+is one list and nothing else, and replacing it is the only edit needed to give
+the app real movements. Every entry in it today is a NATO alphabet word
+round-robined across the five pools — nonsense on purpose, because an entry now
+carries a `MovementPool` and putting a real movement in a real pool is a claim
+about training.
+
+No test reads that file except the one checking its *shape* — ids unique and
+slug-shaped, names unique, pools non-empty. Everything else runs against a
+fixture, so replacing the list cannot turn the suite red.
+
+Two rules worth knowing before editing it:
+
+- **Ids are written down, never derived from names.** History stores an id plus
+  a name snapshot so a rename isn't a migration; deriving the id would re-key
+  every past record the first time you renamed something.
+- **The pool is not shown anywhere in the UI.** It steers the roll — one
+  movement from each of two or three pools, which is what VISION.md asks for —
+  and that is all. The Exercises screen is a flat A–Z list for the same reason
+  the roll screen has no pool labels: which pool something came from is how the
+  app chose, not what you do.
+
 ### Everything downstream — not designed
 
-Movement pools, the hybrid anchor model, weekly volume targets, RIR capture,
+The hybrid anchor model, weekly volume targets, RIR capture,
 casual-vs-hardcore configuration. [VISION.md](VISION.md) is the source for all
 of it; none of it has been designed yet. `SweatColors` names the movement-pool
 tints and the RIR effort ramp as its expected next additions, but neither has
-fields or values.
+fields or values — nothing yet needs a colour per pool, and five brand-adjacent
+colours would each need a contrast-test entry and a decision about competing
+with cognac.
 
 One of those rules has a visual consequence worth flagging early: VISION.md
 rule 4 asks the app to *teach* — "help people learn more about what is and isn't

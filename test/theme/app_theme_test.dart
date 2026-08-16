@@ -4,11 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sweat_roulette/app/app.dart';
 import 'package:sweat_roulette/app/providers.dart';
+import 'package:sweat_roulette/exercises/state/exercise_providers.dart';
 import 'package:sweat_roulette/history/data/session_store.dart';
 import 'package:sweat_roulette/theme/app_colors.dart';
 import 'package:sweat_roulette/theme/app_spacing.dart';
 import 'package:sweat_roulette/theme/app_theme.dart';
 import 'package:sweat_roulette/theme/app_typography.dart';
+
+import '../exercises/catalogue_fixture.dart';
 
 void main() {
   testWidgets('the app is dark whatever the platform asks for', (tester) async {
@@ -25,6 +28,7 @@ void main() {
           appVersionProvider.overrideWithValue('1.2.3'),
           prefsProvider.overrideWithValue(prefs),
           sessionStoreProvider.overrideWithValue(MemorySessionStore()),
+          exerciseCatalogueProvider.overrideWithValue(kTestCatalogue),
         ],
         child: const SweatRouletteApp(),
       ),

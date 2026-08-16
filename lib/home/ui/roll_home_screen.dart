@@ -1,3 +1,4 @@
+import 'dart:math' show Random;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/ui/action_pill.dart';
+import '../../exercises/data/exercise.dart';
+import '../../exercises/state/exercise_providers.dart';
+import '../../exercises/ui/exercise_detail.dart';
 import '../../history/data/seed_history.dart';
 import '../../history/data/session_store.dart';
 import '../../history/state/history_providers.dart';
@@ -258,6 +262,7 @@ class _RollHomeScreenState extends ConsumerState<RollHomeScreen>
                 context,
                 onReset: notifier.reset,
                 onSeed: () => seedHistory(
+                  ref.read(exerciseCatalogueProvider),
                   ref.read(sessionStoreProvider),
                   ref.read(sessionHistoryProvider.notifier),
                 ),
@@ -279,6 +284,16 @@ class _RollHomeScreenState extends ConsumerState<RollHomeScreen>
   Duration _spinFor(int step) => kSpinDuration + kRevealStep * step;
 
   List<Widget> _slotWidgets(RollSession session) {
+    final byId = ref.watch(exerciseByIdProvider);
+
+    // The names a reel smears past on its way to its answer.
+    //
+    // Shuffled, and this matters: `_reelItems` starts its walk at the landing
+    // name's own index, so a catalogue in pool order would fill every card's
+    // blur with that card's pool-mates and the reels would visibly cluster.
+    // A fixed seed, so the blur doesn't reshuffle itself on every rebuild.
+    final blurNames = [for (final e in byId.values) e.name]..shuffle(Random(0));
+
     return [
       for (var i = 0; i < slots; i++) ...[
         if (i > 0)
@@ -307,6 +322,13 @@ class _RollHomeScreenState extends ConsumerState<RollHomeScreen>
           },
           spinFor: _spinFor(RollSession.cardStep(i)),
           onSkip: ref.read(rollSessionProvider.notifier).skipCurrent,
+          blurNames: blurNames,
+          // Resolved here rather than inside the card: a widget that looks
+          // itself up in the catalogue can't be handed a fixture, and a slot
+          // may well name an entry that no longer exists.
+          entry: i < session.exercises.length
+              ? byId[session.exercises[i].id]
+              : null,
         ),
       ],
     ];
@@ -512,6 +534,8 @@ class _ExerciseSlot extends StatefulWidget {
     required this.anchor,
     required this.spinFor,
     required this.onSkip,
+    required this.blurNames,
+    required this.entry,
     super.key,
   });
 
@@ -520,6 +544,14 @@ class _ExerciseSlot extends StatefulWidget {
   /// The user couldn't do this one. Only reachable while the slot is open, so
   /// it is always about the exercise being worked on.
   final VoidCallback onSkip;
+
+  /// Names the reel smears past on the way to its answer. They mean nothing.
+  final List<String> blurNames;
+
+  /// The catalogue entry behind [exercise], if it still resolves — what the
+  /// open card explains. Null for an empty slot, and for a movement the
+  /// catalogue no longer lists.
+  final Exercise? entry;
 
   /// Null for a ghost slot, or a landed skipped one.
   final RolledExercise? exercise;
@@ -651,6 +683,7 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
                       spinning: _turning,
                       spinFor: widget.spinFor,
                       bailed: status == SlotStatus.bailed,
+                      blurNames: widget.blurNames,
                     ),
             ),
             // Clipped and faded together as the card opens and shuts, so the
@@ -666,7 +699,10 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
                       axisAlignment: -1,
                       child: FadeTransition(opacity: _open, child: child),
                     ),
-              child: _ExerciseDetail(onSkip: widget.onSkip),
+              child: _ExerciseDetail(
+                onSkip: widget.onSkip,
+                entry: widget.entry,
+              ),
             ),
           ],
         ),
@@ -692,9 +728,13 @@ class _ReelHead extends StatelessWidget {
     required this.exercise,
     required this.ink,
     required this.spinFor,
+    required this.blurNames,
     this.spinning = false,
     this.bailed = false,
   });
+
+  /// The blur frames. Pre-shuffled by the screen — see `_slotWidgets`.
+  final List<String> blurNames;
 
   /// Marks a landed slot the user said they couldn't do. Never set while
   /// [spinning] — nothing has been decided about a reel still turning.
@@ -771,7 +811,7 @@ class _ReelHead extends StatelessWidget {
         Expanded(
           child: spinning
               ? _Reel(
-                  items: _reelItems(sampleNames, landsOnName, name),
+                  items: _reelItems(blurNames, landsOnName, name),
                   height: _cardHeight,
                   // Stops a beat early, so the movement is read before its
                   // weight — the second beat is what makes it a machine rather
@@ -836,63 +876,27 @@ class _EmptyHead extends StatelessWidget {
 
 /// The body of the card being worked on.
 ///
-/// **Every word of this is a placeholder and is marked as one.** VISION.md rule
-/// 4 asks the app to teach — "help people learn more about what is and isn't
-/// good and healthy" — which makes this real explanatory prose about a movement,
-/// and that is the app owner's to write, not Claude's. What is being designed
-/// here is where the explanation lives and how much room it needs; the copy is
-/// deliberately obvious filler so it can never be mistaken for advice.
+/// Composition, not configuration. The explanation is [ExerciseDetail], shared
+/// with the Exercises screen so a movement reads the same wherever you meet it.
+/// The skip strip is *not* a parameter of it: bailing is about the set you are
+/// in the middle of, not about the movement, and an `ExerciseDetail` with an
+/// optional `onSkip` would be one `if` away from the catalogue offering to skip
+/// an exercise nobody is doing.
 class _ExerciseDetail extends StatelessWidget {
-  const _ExerciseDetail({required this.onSkip});
+  const _ExerciseDetail({required this.onSkip, required this.entry});
 
   final VoidCallback onSkip;
 
+  /// Null when the movement isn't in the catalogue any more — the shared block
+  /// falls back to its placeholder.
+  final Exercise? entry;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SweatSpace.lg,
-            SweatSpace.lg,
-            SweatSpace.lg,
-            SweatSpace.xl,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Reserved, not built. A demonstration still or loop goes here; the
-              // box holds the space so the card's proportions are judged with it
-              // rather than without.
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: context.sweatColors.canvas,
-                    borderRadius: BorderRadius.circular(SweatRadius.chip),
-                    border: Border.all(color: theme.colorScheme.outline),
-                  ),
-                  child: Text('Image', style: context.sweatText.sectionLabel),
-                ),
-              ),
-              const SizedBox(height: SweatSpace.lg),
-              Text('How to', style: context.sweatText.sectionLabel),
-              const SizedBox(height: SweatSpace.sm),
-              Text(
-                'Placeholder — the movement description has not been written. '
-                'This block sizes the card for a short paragraph of real copy, '
-                'which is the app owner’s to supply.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
+        ExerciseDetail(exercise: entry),
         _SkipStrip(onSkip: onSkip),
       ],
     );

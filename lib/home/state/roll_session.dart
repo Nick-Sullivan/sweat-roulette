@@ -4,6 +4,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../exercises/data/exercise.dart';
+import '../../exercises/state/exercise_providers.dart';
+
 /// How many slots a day has. VISION.md rolls 2 or 3 pools, so the third slot is
 /// sometimes skipped — but the layout always shows all three.
 const slots = 3;
@@ -11,17 +14,6 @@ const slots = 3;
 /// The intensity axis. VISION.md rolls heavy/low-rep against light/high-rep;
 /// this is that with a middle setting.
 const intensities = ['Heavy', 'Normal', 'Light'];
-
-/// Sample movement names, taken from the showcase in `home_screen.dart`.
-///
-/// Safe to show now that pool labels are gone: naming a movement asserts
-/// nothing about which pool it belongs to when no pool is displayed. They are
-/// placeholders for layout, not a catalogue.
-const sampleNames = [
-  'Incline Press',
-  'Flat Dumbbell Press',
-  'Bulgarian Split Squat',
-];
 
 /// TEMPORARY: VISION.md calls for a *random* rest interval, but its range is
 /// undecided. A fixed short one so a whole session can be walked in seconds.
@@ -132,30 +124,26 @@ enum RestStatus {
   complete,
 }
 
+/// One exercise as a day rolled it: which movement, and how hard.
+///
+/// Carries the catalogue's [id] and a snapshot of its [name], not the
+/// [Exercise] itself — so the roll screen is never handed a
+/// [MovementPool] and therefore cannot leak one, and so a day already rolled
+/// keeps reading correctly if the catalogue changes underneath it.
 @immutable
 class RolledExercise {
   const RolledExercise(this.name, this.intensity, {this.id = ''});
 
-  /// Stable catalogue id, so a recorded session survives the movement being
-  /// renamed. Derived from [name] by [slugify] until the real catalogue — which
-  /// will own both — exists.
+  /// The catalogue's [Exercise.id]. Identity, so a recorded session survives
+  /// the movement being renamed.
   final String id;
 
+  /// The catalogue's [Exercise.name], as it read on the day.
   final String name;
 
   /// One of [intensities].
   final String intensity;
 }
-
-/// A stable id for a movement, derived from its display name.
-///
-/// A placeholder *mechanism*, not a catalogue: it exists so history stores
-/// identity separately from display from day one, rather than needing a
-/// migration the day real ids arrive.
-String slugify(String name) => name
-    .toLowerCase()
-    .replaceAll(RegExp('[^a-z0-9]+'), '-')
-    .replaceAll(RegExp(r'^-+|-+$'), '');
 
 @immutable
 class RollSession {
@@ -409,23 +397,48 @@ class RollSessionNotifier extends Notifier<RollSession> {
   void _roll() {
     _stopTimer();
 
-    // VISION.md: a day rolls 2 or 3 pools.
-    final count = slots - _random.nextInt(2);
-    final names = [...sampleNames]..shuffle(_random);
+    final catalogue = ref.read(exerciseCatalogueProvider);
+
+    // Only the pools the catalogue can actually fill. An empty pool is not a
+    // short day — VISION.md's short day is the roll choosing two, not the
+    // catalogue running out — so it is dropped before the count is drawn,
+    // rather than producing a slot with nothing in it.
+    final pools = [
+      for (final pool in MovementPool.values)
+        if (catalogue.any((e) => e.pool == pool)) pool,
+    ]..shuffle(_random);
+
+    assert(pools.length >= 2, 'the catalogue must fill at least two pools');
+
+    // VISION.md: a day rolls 2 or 3 pools, selected in random order.
+    final count = min(slots - _random.nextInt(2), pools.length);
 
     state = RollSession(
       phase: SessionPhase.rolling,
-      exercises: [
-        for (var i = 0; i < count; i++)
-          RolledExercise(
-            names[i],
-            intensities[_random.nextInt(intensities.length)],
-            id: slugify(names[i]),
-          ),
-      ],
+      exercises: [for (final pool in pools.take(count)) _pick(catalogue, pool)],
     );
 
     _scheduleLanding();
+  }
+
+  /// One exercise from [pool], at a random intensity.
+  ///
+  /// No repeat check, and none is needed: the pools above are drawn without
+  /// replacement and an [Exercise] belongs to exactly one pool, so a day cannot
+  /// roll the same movement twice. That is a property of [Exercise.pool] being
+  /// single-valued — read the note on it before making it a set.
+  RolledExercise _pick(List<Exercise> catalogue, MovementPool pool) {
+    final choices = [
+      for (final exercise in catalogue)
+        if (exercise.pool == pool) exercise,
+    ];
+    final chosen = choices[_random.nextInt(choices.length)];
+
+    return RolledExercise(
+      chosen.name,
+      intensities[_random.nextInt(intensities.length)],
+      id: chosen.id,
+    );
   }
 
   /// Stops the reels from the top down — the first exercise, then the rest

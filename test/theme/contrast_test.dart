@@ -64,6 +64,10 @@ void main() {
       // Interactive borders.
       'outlineStrong on canvas': (sweat.outlineStrong, sweat.canvas),
       'outlineStrong on surface': (sweat.outlineStrong, scheme.surface),
+      // The search field's focused border, read against the fill it encloses
+      // rather than the canvas outside it. Hint text needs no entry of its own:
+      // it is `onSurfaceVariant on surfaceAlt`, already covered above at 4.5:1.
+      'outlineStrong on surfaceAlt': (sweat.outlineStrong, sweat.surfaceAlt),
     };
 
     pairs.forEach((name, pair) {

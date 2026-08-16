@@ -1,6 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sweat_roulette/exercises/data/exercise.dart';
+import 'package:sweat_roulette/exercises/state/exercise_providers.dart';
 import 'package:sweat_roulette/home/state/roll_session.dart';
+
+import '../exercises/catalogue_fixture.dart';
 
 /// The state machine on its own, without a widget tree. The screen's tests
 /// prove what you see; these prove what the day *is* — cheap enough to run the
@@ -9,7 +13,10 @@ void main() {
   late ProviderContainer container;
 
   setUp(() {
-    container = ProviderContainer();
+    // The fixture, never the shipped catalogue — see `catalogue_fixture.dart`.
+    container = ProviderContainer(
+      overrides: [exerciseCatalogueProvider.overrideWithValue(kTestCatalogue)],
+    );
     // Disposing cancels any rest timer through `ref.onDispose`, so a test that
     // ends mid-rest doesn't leak one into the next.
     addTearDown(container.dispose);
@@ -43,12 +50,21 @@ void main() {
       expect(day.exercises.length, anyOf(2, 3));
       counts.add(day.exercises.length);
 
-      // Every exercise carries an intensity from the axis, and no name repeats
-      // — a day should not roll the same movement twice.
+      // Every exercise carries an intensity from the axis, and resolves in the
+      // catalogue to the name it was rolled under — the id-is-identity,
+      // name-is-a-snapshot contract `SlotRecord` documents, tested at the
+      // source of both.
       for (final e in day.exercises) {
         expect(intensities, contains(e.intensity));
-        expect(sampleNames, contains(e.name));
+
+        final entry = kTestCatalogue.firstWhere((x) => x.id == e.id);
+        expect(e.name, entry.name);
       }
+
+      // No name repeats. This used to hold because the roll shuffled one flat
+      // list; it now holds because pools are drawn without replacement and an
+      // exercise belongs to exactly one pool — see the sibling assertion below,
+      // which is the one carrying the weight.
       expect(
         day.exercises.map((e) => e.name).toSet(),
         hasLength(day.exercises.length),
@@ -66,6 +82,81 @@ void main() {
       expect(read().exercises.length, lessThanOrEqualTo(slots));
       notifier().reset();
     }
+  });
+
+  group('choosing by pool', () {
+    /// The pool each rolled exercise came from, resolved through the catalogue
+    /// — the roll deliberately doesn't carry it, so the screen can't leak it.
+    List<MovementPool> poolsOf(RollSession day) => [
+      for (final e in day.exercises)
+        kTestCatalogue.firstWhere((x) => x.id == e.id).pool,
+    ];
+
+    test('a day never takes two exercises from the same pool', () {
+      // VISION.md: "those many pools are selected in random order, and for each
+      // pool an exercise from each pool is randomly selected."
+      for (var i = 0; i < 200; i++) {
+        rollAndLand();
+        final pools = poolsOf(read());
+        expect(pools.toSet(), hasLength(pools.length));
+        notifier().reset();
+      }
+    });
+
+    test('the pools are ordered randomly, not by declaration', () {
+      // Taking the first N of `MovementPool.values` would pass every other
+      // assertion here and still be wrong — push would open every single day.
+      final opening = <MovementPool>{};
+
+      for (var i = 0; i < 200; i++) {
+        rollAndLand();
+        opening.add(poolsOf(read()).first);
+        notifier().reset();
+      }
+
+      expect(opening, hasLength(greaterThan(1)));
+    });
+
+    test('every pool the catalogue fills is reachable', () {
+      final seen = <MovementPool>{};
+
+      for (var i = 0; i < 200; i++) {
+        rollAndLand();
+        seen.addAll(poolsOf(read()));
+        notifier().reset();
+      }
+
+      expect(seen, MovementPool.values.toSet());
+    });
+
+    test('a pool with nothing in it is skipped, not rolled empty', () {
+      // A catalogue that only fills two pools is a two-pool day every time —
+      // and never a slot with nothing in it. VISION.md's short day is the roll
+      // choosing two, which is a different thing from the catalogue running
+      // out, and the second must not be able to produce a hole.
+      final sparse = ProviderContainer(
+        overrides: [
+          exerciseCatalogueProvider.overrideWithValue(const [
+            Exercise(id: 't-anvil', name: 'Anvil', pool: MovementPool.push),
+            Exercise(id: 't-drum', name: 'Drum', pool: MovementPool.legPull),
+          ]),
+        ],
+      );
+      addTearDown(sparse.dispose);
+
+      final rolls = sparse.read(rollSessionProvider.notifier);
+      for (var i = 0; i < 50; i++) {
+        rolls
+          ..advance()
+          ..advance();
+
+        final day = sparse.read(rollSessionProvider);
+        expect(day.exercises, hasLength(2));
+        expect(day.exercises.every((e) => e.name.isNotEmpty), true);
+
+        rolls.reset();
+      }
+    });
   });
 
   group('the reveal', () {

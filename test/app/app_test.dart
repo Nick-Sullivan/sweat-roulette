@@ -4,12 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sweat_roulette/app/app.dart';
 import 'package:sweat_roulette/app/providers.dart';
+import 'package:sweat_roulette/exercises/data/exercise.dart';
+import 'package:sweat_roulette/exercises/state/exercise_providers.dart';
 import 'package:sweat_roulette/history/data/session_record.dart';
 import 'package:sweat_roulette/history/data/session_store.dart';
 import 'package:sweat_roulette/home/state/roll_session.dart';
 import 'package:sweat_roulette/theme/app_spacing.dart';
 import 'package:sweat_roulette/theme/app_typography.dart';
 import 'package:sweat_roulette/theme/brand/plate_wheel.dart';
+
+import '../exercises/catalogue_fixture.dart';
 
 /// The intensity axis, restated here on purpose. If a fourth value appears it
 /// either came from a VISION.md change — in which case this set moves with it —
@@ -18,7 +22,22 @@ const _intensities = {'Heavy', 'Normal', 'Light'};
 
 /// The pool names must never reach the screen: which pool an exercise came from
 /// is how the app chose, not what you do.
-const _pools = {'PUSH', 'PULL', 'LEG PUSH', 'LEG PULL', 'CORE'};
+///
+/// This used to be trivially true — no pool existed anywhere in the code, so of
+/// course none reached the screen. The roll now genuinely selects one movement
+/// per pool, which makes the assertion load-bearing for the first time. VISION.md's
+/// words *and* the enum's own, so a sixth pool is covered the day it is added.
+final _pools = {
+  'PUSH',
+  'PULL',
+  'LEG PUSH',
+  'LEG PULL',
+  'CORE',
+  for (final pool in MovementPool.values) ...[
+    pool.name,
+    pool.name.toUpperCase(),
+  ],
+};
 
 void main() {
   late MemorySessionStore store;
@@ -36,6 +55,9 @@ void main() {
           // In memory, and — deliberately — timerless: the real store debounces
           // its writes, and a pending `Timer` fails a widget test's teardown.
           sessionStoreProvider.overrideWithValue(store),
+          // The fixture, never the shipped catalogue — see
+          // `test/exercises/catalogue_fixture.dart`.
+          exerciseCatalogueProvider.overrideWithValue(kTestCatalogue),
         ],
         child: const SweatRouletteApp(),
       ),
@@ -202,10 +224,10 @@ void main() {
     ) async {
       await pumpApp(tester);
 
-      // History has no AppBar: like the roll screen, its way back is the left
-      // compartment of the bottom pill, so the affordance is in the place the
-      // thumb already knows. The two undesigned screens still carry a bar, and
-      // are still reached and left the ordinary way.
+      // History and Exercises have no AppBar: like the roll screen, their way
+      // back is the left compartment of the bottom pill, so the affordance is
+      // in the place the thumb already knows. Config is the last screen still
+      // carrying a bar, and is still reached and left the ordinary way.
       final destinations = <(Key, Finder, Future<void> Function())>[
         (
           const Key('nav-history'),
@@ -214,8 +236,8 @@ void main() {
         ),
         (
           const Key('nav-exercises'),
-          find.text('Exercises'),
-          () => tester.pageBack(),
+          find.byKey(const Key('exercises-back')),
+          () => tester.tap(find.byKey(const Key('exercises-back'))),
         ),
         (const Key('nav-config'), find.text('Config'), () => tester.pageBack()),
       ];
@@ -767,10 +789,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(store.records, isNotEmpty);
-      // Placeholder days only — nothing invented outside the sample list.
+      // The seeder invents no movement the catalogue doesn't already have.
       for (final record in store.records) {
         for (final slot in record.slots) {
-          expect(sampleNames, contains(slot.name));
+          final entry = kTestCatalogue.firstWhere((e) => e.id == slot.id);
+          expect(slot.name, entry.name);
         }
       }
     });

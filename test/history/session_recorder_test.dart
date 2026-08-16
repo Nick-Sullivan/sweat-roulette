@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sweat_roulette/exercises/state/exercise_providers.dart';
 import 'package:sweat_roulette/history/data/session_record.dart';
 import 'package:sweat_roulette/history/data/session_store.dart';
 import 'package:sweat_roulette/history/state/history_providers.dart';
 import 'package:sweat_roulette/history/state/session_recorder.dart';
 import 'package:sweat_roulette/home/state/roll_session.dart';
+
+import '../exercises/catalogue_fixture.dart';
 
 /// What actually reaches storage as a session is walked.
 ///
@@ -18,7 +21,12 @@ void main() {
   setUp(() {
     store = MemorySessionStore();
     container = ProviderContainer(
-      overrides: [sessionStoreProvider.overrideWithValue(store)],
+      overrides: [
+        sessionStoreProvider.overrideWithValue(store),
+        // The fixture, never the shipped catalogue — see
+        // `test/exercises/catalogue_fixture.dart`.
+        exerciseCatalogueProvider.overrideWithValue(kTestCatalogue),
+      ],
     );
     // Disposing cancels any rest timer through `ref.onDispose`, so a test that
     // ends mid-rest doesn't leak one into the next.
@@ -85,9 +93,15 @@ void main() {
       rollDayOf(3);
       walkToEnd();
 
+      // The id is the identity and the name is a snapshot — two fields, so
+      // renaming a movement is not a migration. Deliberately *not* asserting
+      // that the id is a slug of the name: pinning one to the other is the
+      // exact coupling `SlotRecord`'s doc comment exists to prevent. What has
+      // to hold is that the id resolves, and that what was written down is
+      // what was rolled.
       for (final slot in store.records.single.slots) {
-        expect(sampleNames, contains(slot.name));
-        expect(slot.id, slugify(slot.name));
+        final entry = kTestCatalogue.firstWhere((e) => e.id == slot.id);
+        expect(slot.name, entry.name);
         expect(intensities, contains(slot.intensity));
       }
     });

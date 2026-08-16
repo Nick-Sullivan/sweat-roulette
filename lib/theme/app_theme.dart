@@ -159,6 +159,41 @@ abstract final class SweatTheme {
       ),
     ),
 
+    // The app's first text input lands on the Exercises screen's search field.
+    // Defined here rather than at that call site so Config's inputs match it
+    // without anyone having to remember to make them.
+    //
+    // `surfaceAlt` is the token DESIGN.md names for "chip, input, inactive
+    // track". The resting border is the decorative hairline; focus steps it up
+    // to `outlineStrong`, which is the token for a border that carries meaning
+    // and the one that clears 3:1.
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: SweatPalette.surfaceAlt,
+      hintStyle: SweatTypography.textTheme.bodyLarge?.copyWith(
+        color: SweatPalette.inkLow,
+      ),
+      prefixIconColor: SweatPalette.inkLow,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: SweatSpace.lg,
+        vertical: SweatSpace.md,
+      ),
+      // A stadium, so the field reads as a set with the action pill sitting
+      // directly beneath it.
+      border: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(SweatRadius.pill)),
+        borderSide: BorderSide(color: SweatPalette.outline),
+      ),
+      enabledBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(SweatRadius.pill)),
+        borderSide: BorderSide(color: SweatPalette.outline),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(SweatRadius.pill)),
+        borderSide: BorderSide(color: SweatPalette.outlineStrong, width: 1.5),
+      ),
+    ),
+
     listTileTheme: const ListTileThemeData(
       minVerticalPadding: SweatSpace.md,
       iconColor: SweatPalette.inkLow,
