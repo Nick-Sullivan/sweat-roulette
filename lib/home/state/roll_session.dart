@@ -98,8 +98,16 @@ enum SlotStatus {
   /// Already done. Recedes down the graphite ramp.
   complete,
 
+  /// Done with, because the user said they couldn't do it. Recedes like
+  /// [complete] and carries a mark saying so.
+  bailed,
+
   /// A slot this day didn't fill.
-  skipped,
+  ///
+  /// Named for the roll, not for the user: VISION.md rolls 2 *or* 3 pools, so
+  /// an empty third slot is the app working correctly and must never read as
+  /// something the day fell short of. [bailed] is the one the user chose.
+  unrolled,
 }
 
 /// How the rest gap *above* an exercise draws.
@@ -126,13 +134,28 @@ enum RestStatus {
 
 @immutable
 class RolledExercise {
-  const RolledExercise(this.name, this.intensity);
+  const RolledExercise(this.name, this.intensity, {this.id = ''});
+
+  /// Stable catalogue id, so a recorded session survives the movement being
+  /// renamed. Derived from [name] by [slugify] until the real catalogue — which
+  /// will own both — exists.
+  final String id;
 
   final String name;
 
   /// One of [intensities].
   final String intensity;
 }
+
+/// A stable id for a movement, derived from its display name.
+///
+/// A placeholder *mechanism*, not a catalogue: it exists so history stores
+/// identity separately from display from day one, rather than needing a
+/// migration the day real ids arrive.
+String slugify(String name) => name
+    .toLowerCase()
+    .replaceAll(RegExp('[^a-z0-9]+'), '-')
+    .replaceAll(RegExp(r'^-+|-+$'), '');
 
 @immutable
 class RollSession {
@@ -142,6 +165,7 @@ class RollSession {
     this.index = 0,
     this.secondsLeft = 0,
     this.revealed = 0,
+    this.bailed = const {},
   });
 
   final SessionPhase phase;
@@ -164,6 +188,13 @@ class RollSession {
   /// position is the one currently spinning.
   final int revealed;
 
+  /// Slots the user said they couldn't do.
+  ///
+  /// Kept apart from the slots the *roll* didn't fill, which are simply the
+  /// ones past the end of [exercises]. Only one of the two is a shortfall, and
+  /// conflating them would count a two-pool day as a failed three-pool one.
+  final Set<int> bailed;
+
   /// Positions in the reveal run: every slot, and a rest between each pair.
   ///
   /// Every slot, plus a gap for each pair of exercises that actually happen.
@@ -176,8 +207,7 @@ class RollSession {
   /// every exercise has landed, so a gap above a skipped slot has nothing left
   /// to hide and nothing to reveal — it is dropped from the run rather than
   /// given a turn to stop on nothing.
-  int get revealSteps =>
-      exercises.isEmpty ? 0 : slots + exercises.length - 1;
+  int get revealSteps => exercises.isEmpty ? 0 : slots + exercises.length - 1;
 
   /// The reveal position of the card in slot [i], and of the rest above it.
   ///
@@ -225,24 +255,28 @@ class RollSession {
       final step = cardStep(i);
       if (step == revealed) return SlotStatus.settling;
       if (step > revealed) return SlotStatus.spinning;
-      return i >= exercises.length ? SlotStatus.skipped : SlotStatus.pending;
+      return i >= exercises.length ? SlotStatus.unrolled : SlotStatus.pending;
     }
 
-    if (i >= exercises.length) return SlotStatus.skipped;
+    if (i >= exercises.length) return SlotStatus.unrolled;
 
     return switch (phase) {
       // Unreachable — both are handled above. Listed so the switch stays total
       // and a new phase is a compile error rather than a blank slot.
       SessionPhase.clear || SessionPhase.rolling => SlotStatus.ghost,
       SessionPhase.rolled => SlotStatus.pending,
-      SessionPhase.done => SlotStatus.complete,
+      SessionPhase.done => _finished(i),
       SessionPhase.exercising when i == index => SlotStatus.active,
       // While resting, [index] is the exercise the rest leads *into* — not
       // started, so pending rather than active.
-      SessionPhase.exercising || SessionPhase.resting =>
-        i < index ? SlotStatus.complete : SlotStatus.pending,
+      SessionPhase.exercising ||
+      SessionPhase.resting => i < index ? _finished(i) : SlotStatus.pending,
     };
   }
+
+  /// How a slot the session has moved past draws — done, or bailed on.
+  SlotStatus _finished(int i) =>
+      bailed.contains(i) ? SlotStatus.bailed : SlotStatus.complete;
 
   /// How the rest gap above the exercise in slot [i] draws. Slot 0 has none.
   RestStatus restStatusAt(int i) {
@@ -254,9 +288,7 @@ class RollSession {
       // short day away. The moment the skip lands it stops too, without
       // waiting for a turn it has nothing to say on.
       if (i >= exercises.length) {
-        return cardStep(i) < revealed
-            ? RestStatus.ghost
-            : RestStatus.spinning;
+        return cardStep(i) < revealed ? RestStatus.ghost : RestStatus.spinning;
       }
 
       final step = restStep(i);
@@ -290,6 +322,7 @@ class RollSession {
     int? index,
     int? secondsLeft,
     int? revealed,
+    Set<int>? bailed,
   }) {
     return RollSession(
       phase: phase ?? this.phase,
@@ -297,6 +330,7 @@ class RollSession {
       index: index ?? this.index,
       secondsLeft: secondsLeft ?? this.secondsLeft,
       revealed: revealed ?? this.revealed,
+      bailed: bailed ?? this.bailed,
     );
   }
 }
@@ -349,6 +383,18 @@ class RollSessionNotifier extends Notifier<RollSession> {
     }
   }
 
+  /// The user couldn't do the exercise they're on. Marks it and moves on.
+  ///
+  /// One tap, not two: it advances exactly as NEXT does, because a control that
+  /// only records and then wants a second press to continue is a control you
+  /// stop using mid-set. Ignored outside [SessionPhase.exercising] — there is
+  /// no current exercise to bail on while a rest is running.
+  void skipCurrent() {
+    if (state.phase != SessionPhase.exercising) return;
+    state = state.copyWith(bailed: {...state.bailed, state.index});
+    advance();
+  }
+
   /// Back to three empty slots, from wherever the session had got to.
   void reset() {
     _stopTimer();
@@ -374,6 +420,7 @@ class RollSessionNotifier extends Notifier<RollSession> {
           RolledExercise(
             names[i],
             intensities[_random.nextInt(intensities.length)],
+            id: slugify(names[i]),
           ),
       ],
     );
@@ -449,5 +496,6 @@ class RollSessionNotifier extends Notifier<RollSession> {
   }
 }
 
-final rollSessionProvider =
-    NotifierProvider<RollSessionNotifier, RollSession>(RollSessionNotifier.new);
+final rollSessionProvider = NotifierProvider<RollSessionNotifier, RollSession>(
+  RollSessionNotifier.new,
+);

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sweat_roulette/app/app.dart';
 import 'package:sweat_roulette/app/providers.dart';
+import 'package:sweat_roulette/history/data/session_store.dart';
 import 'package:sweat_roulette/theme/app_colors.dart';
 import 'package:sweat_roulette/theme/app_spacing.dart';
 import 'package:sweat_roulette/theme/app_theme.dart';
@@ -23,6 +24,7 @@ void main() {
         overrides: [
           appVersionProvider.overrideWithValue('1.2.3'),
           prefsProvider.overrideWithValue(prefs),
+          sessionStoreProvider.overrideWithValue(MemorySessionStore()),
         ],
         child: const SweatRouletteApp(),
       ),

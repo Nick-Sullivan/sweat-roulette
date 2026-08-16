@@ -5,6 +5,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/ui/action_pill.dart';
+import '../../history/data/seed_history.dart';
+import '../../history/data/session_store.dart';
+import '../../history/state/history_providers.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -250,7 +254,14 @@ class _RollHomeScreenState extends ConsumerState<RollHomeScreen>
             _ActionRow(
               label: session.actionLabel,
               onPressed: notifier.advance,
-              onNavigate: () => _openNavSheet(context, onReset: notifier.reset),
+              onNavigate: () => _openNavSheet(
+                context,
+                onReset: notifier.reset,
+                onSeed: () => seedHistory(
+                  ref.read(sessionStoreProvider),
+                  ref.read(sessionHistoryProvider.notifier),
+                ),
+              ),
             ),
           ],
         ),
@@ -291,10 +302,11 @@ class _RollHomeScreenState extends ConsumerState<RollHomeScreen>
           // would print the answer above a reel that hasn't spun yet.
           exercise: switch (session.statusOf(i)) {
             SlotStatus.ghost => null,
-            SlotStatus.skipped when !session.isRolling => null,
+            SlotStatus.unrolled when !session.isRolling => null,
             _ => i < session.exercises.length ? session.exercises[i] : null,
           },
           spinFor: _spinFor(RollSession.cardStep(i)),
+          onSkip: ref.read(rollSessionProvider.notifier).skipCurrent,
         ),
       ],
     ];
@@ -310,7 +322,11 @@ class _RollHomeScreenState extends ConsumerState<RollHomeScreen>
 /// A sheet rather than a row of icons: VISION.md names three more screens and
 /// will likely name more, and a sheet grows to fit them without spending any of
 /// the roll screen on chrome that is used once a session at most.
-void _openNavSheet(BuildContext context, {required VoidCallback onReset}) {
+void _openNavSheet(
+  BuildContext context, {
+  required VoidCallback onReset,
+  required VoidCallback onSeed,
+}) {
   final theme = Theme.of(context);
 
   showModalBottomSheet<void>(
@@ -330,57 +346,88 @@ void _openNavSheet(BuildContext context, {required VoidCallback onReset}) {
       }
 
       return SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: SweatSpace.sm),
-            const _SheetGrabber(),
-            ListTile(
-              key: const Key('nav-history'),
-              leading: const Icon(Icons.history),
-              title: const Text('History'),
-              onTap: () => goTo('/history'),
-            ),
-            ListTile(
-              key: const Key('nav-exercises'),
-              leading: const Icon(Icons.list),
-              title: const Text('Exercises'),
-              onTap: () => goTo('/exercises'),
-            ),
-            ListTile(
-              key: const Key('nav-config'),
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Config'),
-              onTap: () => goTo('/config'),
-            ),
+        // Scrollable, because a modal sheet is capped at a fraction of the
+        // screen and this list only grows — VISION.md names more destinations
+        // than are built. Without it, the tile that tips it over the cap is an
+        // overflow rather than something you can reach.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: SweatSpace.sm),
+              const _SheetGrabber(),
+              ListTile(
+                key: const Key('nav-history'),
+                leading: const Icon(Icons.history),
+                title: const Text('History'),
+                onTap: () => goTo('/history'),
+              ),
+              ListTile(
+                key: const Key('nav-exercises'),
+                leading: const Icon(Icons.list),
+                title: const Text('Exercises'),
+                onTap: () => goTo('/exercises'),
+              ),
+              ListTile(
+                key: const Key('nav-config'),
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Config'),
+                onTap: () => goTo('/config'),
+              ),
 
-            // TEMPORARY: the owner's testing affordance, so a session can be
-            // thrown away from any phase without walking it to the end. Delete
-            // this divider and tile together with `kRestSeconds`.
-            const Divider(),
-            ListTile(
-              key: const Key('reset'),
-              leading: Icon(
-                Icons.restart_alt,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              title: Text(
-                'Reset',
-                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              subtitle: Text(
-                'Temporary — for testing',
-                style: theme.textTheme.bodySmall?.copyWith(
+              // TEMPORARY: the owner's testing affordance, so a session can be
+              // thrown away from any phase without walking it to the end. Delete
+              // this divider and tile together with `kRestSeconds`.
+              const Divider(),
+              ListTile(
+                key: const Key('reset'),
+                leading: Icon(
+                  Icons.restart_alt,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
+                title: Text(
+                  'Reset',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                subtitle: Text(
+                  'Temporary — for testing',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onReset();
+                },
               ),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                onReset();
-              },
-            ),
-            const SizedBox(height: SweatSpace.sm),
-          ],
+
+              // TEMPORARY, and part of the same block: History is empty until a
+              // few weeks of real sessions exist, and the calendar can't be
+              // judged empty. Writes obviously-fake placeholder days.
+              ListTile(
+                key: const Key('seed-history'),
+                leading: Icon(
+                  Icons.auto_fix_high,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                title: Text(
+                  'Seed history',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                subtitle: Text(
+                  'Temporary — placeholder sessions',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onSeed();
+                },
+              ),
+              const SizedBox(height: SweatSpace.sm),
+            ],
+          ),
         ),
       );
     },
@@ -415,11 +462,7 @@ class _SheetGrabber extends StatelessWidget {
 /// where the thumb already is, which is the point of VISION.md's tired-hands
 /// rule.
 ///
-/// The split is a groove, not just a line: [SweatSize.targetGap] of the pill
-/// between the two halves belongs to neither and responds to nothing. DESIGN.md
-/// asks for that gap so a sloppy tap can't hit two things, and merging the
-/// halves into one silhouette is not a reason to give it up — it just moves the
-/// gap inside the shape.
+/// The pill itself lives in [ActionPill], because History draws the same one.
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
     required this.label,
@@ -433,126 +476,20 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        SweatSize.gutter,
-        SweatSpace.sm,
-        SweatSize.gutter,
-        SweatSpace.lg,
-      ),
-      child: Container(
-        height: SweatSize.primaryAction,
-        clipBehavior: Clip.antiAlias,
-        decoration: ShapeDecoration(
-          color: theme.colorScheme.primary,
-          shape: const StadiumBorder(),
+    return ActionPill(
+      compartments: [
+        PillAction(
+          actionKey: const Key('nav-menu'),
+          onTap: onNavigate,
+          child: const Icon(Icons.menu),
         ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Row(
-            // Stretch so both halves — and the seam between them — run the
-            // full height of the pill.
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: InkWell(
-                  key: const Key('nav-menu'),
-                  onTap: onNavigate,
-                  child: Center(
-                    child: Icon(
-                      Icons.menu,
-                      color: theme.colorScheme.onPrimary,
-                    ),
-                  ),
-                ),
-              ),
-              const _ActionSeam(),
-              Expanded(
-                flex: 4,
-                child: InkWell(
-                  key: const Key('primary-action'),
-                  onTap: onPressed,
-                  child: Center(
-                    child: Text(
-                      label,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: theme.colorScheme.onPrimary,
-                        letterSpacing: 4.0,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        PillAction(
+          actionKey: const Key('primary-action'),
+          flex: 4,
+          onTap: onPressed,
+          child: Text(label),
         ),
-      ),
-    );
-  }
-}
-
-/// The join between the two halves of the action pill.
-///
-/// Not a drawn line but a machined one: a dark groove with a lit edge beside
-/// it, the way a seam in a solid object catches light. That reads as one piece
-/// of metal parted rather than two shapes butted together — DESIGN.md's
-/// restrained-luxury direction, a watch bezel rather than a border.
-///
-/// Runs edge to edge and stays only as wide as itself, so pressing either half
-/// fills its colour right up to the seam with no dead strip beside it. It also
-/// swells through the middle and eases off at the ends, which is what stops
-/// three flat pixels from reading as a rule someone forgot to remove.
-///
-/// The cost is DESIGN.md's 12dp gap between adjacent targets: the two halves
-/// are a hair apart, so a tap by the seam can land on either. What guards it
-/// instead is distance — the seam sits at a fifth of the width, nowhere near
-/// where a thumb aims for the action.
-class _ActionSeam extends StatelessWidget {
-  const _ActionSeam();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return SizedBox(
-      width: 3,
-      child: Row(
-        // Stretch, or the two edges size to their own content — which is
-        // nothing — and the seam disappears entirely.
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // The cut, then the light catching its far wall.
-          Expanded(child: _SeamEdge(scheme.inversePrimary)),
-          Expanded(child: _SeamEdge(scheme.onPrimaryContainer)),
-        ],
-      ),
-    );
-  }
-}
-
-class _SeamEdge extends StatelessWidget {
-  const _SeamEdge(this.color);
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          // Never fully transparent: the line still has to reach both edges.
-          colors: [
-            color.withValues(alpha: 0.4),
-            color,
-            color.withValues(alpha: 0.4),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
@@ -574,10 +511,15 @@ class _ExerciseSlot extends StatefulWidget {
     required this.exercise,
     required this.anchor,
     required this.spinFor,
+    required this.onSkip,
     super.key,
   });
 
   final SlotStatus status;
+
+  /// The user couldn't do this one. Only reachable while the slot is open, so
+  /// it is always about the exercise being worked on.
+  final VoidCallback onSkip;
 
   /// Null for a ghost slot, or a landed skipped one.
   final RolledExercise? exercise;
@@ -622,11 +564,7 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
     // list is still moving after it has finished — nothing left to correct.
     _open = CurvedAnimation(
       parent: _expand,
-      curve: const Interval(
-        _openingBegins,
-        1,
-        curve: Curves.easeInOutCubic,
-      ),
+      curve: const Interval(_openingBegins, 1, curve: Curves.easeInOutCubic),
     );
   }
 
@@ -657,22 +595,14 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
     // built on.
     final (Color? fill, Color border, Color ink) = switch (status) {
       SlotStatus.ghost ||
-      SlotStatus.skipped => (null, scheme.outline, scheme.onSurfaceVariant),
+      SlotStatus.unrolled => (null, scheme.outline, scheme.onSurfaceVariant),
       SlotStatus.pending ||
       // A reel with others still to stop before it is just noise — marking
       // every one of them would point at nothing.
-      SlotStatus.spinning => (
-        scheme.surface,
-        scheme.outline,
-        scheme.onSurface,
-      ),
+      SlotStatus.spinning => (scheme.surface, scheme.outline, scheme.onSurface),
       // Cognac is DESIGN.md's colour for the roll itself, and this is where the
       // roll is about to say something.
-      SlotStatus.settling => (
-        scheme.surface,
-        scheme.primary,
-        scheme.onSurface,
-      ),
+      SlotStatus.settling => (scheme.surface, scheme.primary, scheme.onSurface),
       // `outlineStrong` is the token for a border that carries meaning, and it
       // clears 3:1. Champagne stays reserved for rewards — an exercise in
       // progress has not been won yet.
@@ -681,7 +611,10 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
         context.sweatColors.outlineStrong,
         scheme.onSurface,
       ),
-      SlotStatus.complete => (
+      // A slot the user bailed on is finished with, so it recedes exactly like
+      // a completed one. What separates them is the mark in the head, not
+      // another step down a ramp that already has four values on this screen.
+      SlotStatus.complete || SlotStatus.bailed => (
         scheme.surfaceContainerLow,
         scheme.outline,
         scheme.onSurfaceVariant,
@@ -717,6 +650,7 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
                       ink: ink,
                       spinning: _turning,
                       spinFor: widget.spinFor,
+                      bailed: status == SlotStatus.bailed,
                     ),
             ),
             // Clipped and faded together as the card opens and shuts, so the
@@ -732,7 +666,7 @@ class _ExerciseSlotState extends State<_ExerciseSlot>
                       axisAlignment: -1,
                       child: FadeTransition(opacity: _open, child: child),
                     ),
-              child: const _ExerciseDetail(),
+              child: _ExerciseDetail(onSkip: widget.onSkip),
             ),
           ],
         ),
@@ -759,7 +693,12 @@ class _ReelHead extends StatelessWidget {
     required this.ink,
     required this.spinFor,
     this.spinning = false,
+    this.bailed = false,
   });
+
+  /// Marks a landed slot the user said they couldn't do. Never set while
+  /// [spinning] — nothing has been decided about a reel still turning.
+  final bool bailed;
 
   /// Null while a slot the day didn't fill is spinning — its reels stop on
   /// `Skipped today` and a blank, so it turns exactly like the others and only
@@ -785,6 +724,30 @@ class _ReelHead extends StatelessWidget {
         ),
       ),
     );
+
+    // A bailed slot keeps its name and its place — the day rolled it, and it
+    // is recorded. What it gains is a mark saying you didn't do it, which is
+    // the only thing separating it from a completed slot at this size.
+    Widget landed(String value) {
+      if (!bailed) return name(value);
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: SweatSpace.lg),
+        child: Row(
+          children: [
+            Icon(Icons.close, size: 18, color: ink),
+            const SizedBox(width: SweatSpace.sm),
+            Flexible(
+              child: Text(
+                value,
+                style: theme.textTheme.titleLarge?.copyWith(color: ink),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     Widget intensity(String value) => Center(
       child: Text(
@@ -815,7 +778,7 @@ class _ReelHead extends StatelessWidget {
                   // than a reveal.
                   duration: spinFor - _reelStagger,
                 )
-              : name(landsOnName),
+              : landed(landsOnName),
         ),
         const _ReelDivider(),
         SizedBox(
@@ -846,7 +809,7 @@ class _EmptyHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (status == SlotStatus.skipped) {
+    if (status == SlotStatus.unrolled) {
       return Align(
         alignment: Alignment.centerLeft,
         child: Padding(
@@ -880,50 +843,110 @@ class _EmptyHead extends StatelessWidget {
 /// here is where the explanation lives and how much room it needs; the copy is
 /// deliberately obvious filler so it can never be mistaken for advice.
 class _ExerciseDetail extends StatelessWidget {
-  const _ExerciseDetail();
+  const _ExerciseDetail({required this.onSkip});
+
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        SweatSpace.lg,
-        SweatSpace.lg,
-        SweatSpace.lg,
-        SweatSpace.xl,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Reserved, not built. A demonstration still or loop goes here; the
-          // box holds the space so the card's proportions are judged with it
-          // rather than without.
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: context.sweatColors.canvas,
-                borderRadius: BorderRadius.circular(SweatRadius.chip),
-                border: Border.all(color: theme.colorScheme.outline),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            SweatSpace.lg,
+            SweatSpace.lg,
+            SweatSpace.lg,
+            SweatSpace.xl,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Reserved, not built. A demonstration still or loop goes here; the
+              // box holds the space so the card's proportions are judged with it
+              // rather than without.
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: context.sweatColors.canvas,
+                    borderRadius: BorderRadius.circular(SweatRadius.chip),
+                    border: Border.all(color: theme.colorScheme.outline),
+                  ),
+                  child: Text('Image', style: context.sweatText.sectionLabel),
+                ),
               ),
-              child: Text('Image', style: context.sweatText.sectionLabel),
+              const SizedBox(height: SweatSpace.lg),
+              Text('How to', style: context.sweatText.sectionLabel),
+              const SizedBox(height: SweatSpace.sm),
+              Text(
+                'Placeholder — the movement description has not been written. '
+                'This block sizes the card for a short paragraph of real copy, '
+                'which is the app owner’s to supply.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _SkipStrip(onSkip: onSkip),
+      ],
+    );
+  }
+}
+
+/// The way to say you couldn't do this one.
+///
+/// Inside the card rather than beside the action, because it is unambiguously
+/// about *this* exercise — and because the action pill has one job and gains
+/// nothing from a second, smaller target next to the one your thumb aims for.
+///
+/// It rides the card's existing open-and-shut animation and starts none of its
+/// own. It is the full width of the card and [SweatSize.minTarget] tall, so it
+/// is still a fair target after a set even though it sits at the top of the
+/// screen.
+class _SkipStrip extends StatelessWidget {
+  const _SkipStrip({required this.onSkip});
+
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(height: 1, color: theme.colorScheme.outline),
+        InkWell(
+          key: const Key('skip-exercise'),
+          onTap: onSkip,
+          child: SizedBox(
+            height: SweatSize.minTarget,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.close,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: SweatSpace.sm),
+                Text(
+                  'Couldn’t do it',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: SweatSpace.lg),
-          Text('How to', style: context.sweatText.sectionLabel),
-          const SizedBox(height: SweatSpace.sm),
-          Text(
-            'Placeholder — the movement description has not been written. '
-            'This block sizes the card for a short paragraph of real copy, '
-            'which is the app owner’s to supply.',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -995,8 +1018,7 @@ class _ReelState extends State<_Reel> with SingleTickerProviderStateMixin {
       1,
       40,
     );
-    _distance =
-        (laps * widget.items.length + _reelLead) * widget.height;
+    _distance = (laps * widget.items.length + _reelLead) * widget.height;
 
     _controller = AnimationController(vsync: this, duration: widget.duration);
     _spin = CurvedAnimation(parent: _controller, curve: _ReelCurve(cruise));
@@ -1120,7 +1142,11 @@ const _reelBlur = 7.0;
 const _reelStagger = Duration(milliseconds: 180);
 
 /// What a slot the day didn't fill says, spinning or landed.
-const _skippedLabel = 'Skipped today';
+///
+/// Not "skipped": since the user can now skip an exercise themselves, that word
+/// means two opposite things — one of them a shortfall and one of them the roll
+/// working exactly as VISION.md describes. This is the roll's.
+const _skippedLabel = 'Not rolled';
 
 /// Builds a reel's contents: [landing] first, then blur frames drawn from
 /// [pool] by walking it, so they repeat when the pool is short — exactly as a
@@ -1287,8 +1313,10 @@ class _RestSlotState extends State<_RestSlot>
                 // actually running — DESIGN.md's colour for the roll and for
                 // active states. A gap merely turning is left unmarked.
                 RestStatus.settling => Border.all(color: scheme.primary),
-                RestStatus.active =>
-                  Border.all(color: scheme.primary, width: 2),
+                RestStatus.active => Border.all(
+                  color: scheme.primary,
+                  width: 2,
+                ),
                 _ => null,
               },
             ),
@@ -1403,14 +1431,17 @@ class _LiveRest extends StatelessWidget {
 // Shared
 // ---------------------------------------------------------------------------
 
-/// Height of a slot's reel head. Fixed so a ghost, a skipped slot and a filled
-/// card are exactly the same size — the reveal changes what's in the slot,
-/// never where the slot is. An expanded card grows *below* this.
-const _cardHeight = 72.0;
+/// Height of a slot's reel head. Fixed so a ghost, an unrolled slot and a
+/// filled card are exactly the same size — the reveal changes what's in the
+/// slot, never where the slot is. An expanded card grows *below* this.
+///
+/// A token rather than a number here, because History replays the same slot and
+/// the two have to agree by reading the same value.
+const _cardHeight = SweatSize.slot;
 
 /// Width of the intensity reel. Fixed rather than sized to its text so the
 /// divider lands at the same x on every card — see [_ReelHead].
-const _intensityWidth = 104.0;
+const _intensityWidth = SweatSize.intensityColumn;
 
 const _restBarHeight = 32.0;
 const _restTrackHeight = 4.0;

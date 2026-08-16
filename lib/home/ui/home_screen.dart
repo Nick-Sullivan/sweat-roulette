@@ -121,7 +121,8 @@ class _Swatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hex = '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
+    final hex =
+        '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: SweatSpace.md),
@@ -247,11 +248,17 @@ class _Actions extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: FilledButton(onPressed: () {}, child: const Text('Log set')),
+              child: FilledButton(
+                onPressed: () {},
+                child: const Text('Log set'),
+              ),
             ),
             const SizedBox(width: SweatSize.targetGap),
             Expanded(
-              child: OutlinedButton(onPressed: () {}, child: const Text('Skip')),
+              child: OutlinedButton(
+                onPressed: () {},
+                child: const Text('Skip'),
+              ),
             ),
           ],
         ),
@@ -298,8 +305,10 @@ class _Surfaces extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Flat Dumbbell Press',
-                          style: theme.textTheme.titleMedium),
+                      Text(
+                        'Flat Dumbbell Press',
+                        style: theme.textTheme.titleMedium,
+                      ),
                       const SizedBox(height: SweatSpace.xs),
                       Text(
                         '4 sets · 1–3 RIR',

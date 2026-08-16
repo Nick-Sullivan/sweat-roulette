@@ -33,4 +33,16 @@ abstract final class SweatSize {
 
   /// Screen edge padding.
   static const gutter = SweatSpace.lg;
+
+  /// Height of one exercise slot's head row.
+  ///
+  /// A token rather than a screen-local constant because two screens draw the
+  /// same slot: the roll reveals it, History replays it. They have to agree by
+  /// reading the same number, not by coincidence.
+  static const slot = 72.0;
+
+  /// Width of a slot's intensity column. Fixed rather than sized to its text —
+  /// `Heavy`, `Normal` and `Light` are three different widths, and letting the
+  /// column shrink to fit would put the divider at a different x on every card.
+  static const intensityColumn = 104.0;
 }

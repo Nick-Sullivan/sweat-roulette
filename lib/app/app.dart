@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../history/state/session_recorder.dart';
 import '../theme/app_theme.dart';
 import 'router.dart';
 
@@ -9,6 +10,12 @@ class SweatRouletteApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Both are watched purely to bring them into existence: a lazy provider
+    // nobody watches never subscribes, and the recorder would then miss every
+    // session. Neither value ever changes, so this costs no rebuilds.
+    ref.watch(sessionRecorderProvider);
+    ref.watch(sessionFlushProvider);
+
     return MaterialApp.router(
       title: 'Sweat Roulette',
       debugShowCheckedModeBanner: false,

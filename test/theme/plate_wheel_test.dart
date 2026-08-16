@@ -82,7 +82,10 @@ Future<List<int>> _rasterise(PlateWheelStyle style, int size) async {
   final bytes = data!.buffer.asUint8List();
   return [
     for (var i = 0; i < bytes.length; i += 4)
-      (bytes[i + 3] << 24) | (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2],
+      (bytes[i + 3] << 24) |
+          (bytes[i] << 16) |
+          (bytes[i + 1] << 8) |
+          bytes[i + 2],
   ];
 }
 

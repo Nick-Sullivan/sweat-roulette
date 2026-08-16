@@ -125,7 +125,10 @@ class PlateWheelStyle {
 }
 
 class PlateWheelPainter extends CustomPainter {
-  const PlateWheelPainter({this.style = PlateWheelStyle.mark, this.rotation = 0});
+  const PlateWheelPainter({
+    this.style = PlateWheelStyle.mark,
+    this.rotation = 0,
+  });
 
   final PlateWheelStyle style;
 

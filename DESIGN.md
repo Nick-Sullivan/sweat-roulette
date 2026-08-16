@@ -29,6 +29,9 @@ Two standing instructions before anything else:
 | **Plate-wheel** mark | A bumper plate and a roulette wheel share a silhouette. One shape says gym and gamble simultaneously. |
 | **Cognac ground** for the icon | A dark-on-dark icon disappears against dark wallpapers. Warm brown holds its own in a grid of loud icons. |
 | **Mark-only splash** | The app boots in well under a second; a wordmark would be gone before it could be read. |
+| **One pill, many compartments** | The roll screen's action row and History's back/prev/next are the same shape in the same place, so a thumb never learns a second position. [lib/app/ui/action_pill.dart](lib/app/ui/action_pill.dart). |
+| **Cognac only on the roll's pill** | History's pill is graphite. Three brand-filled compartments on a screen with no action would spend the colour that makes the roll screen's one button mean something. |
+| **Champagne marks the selection, not the achievement** | A month grid tinting every completed day gold would put the reward colour on screen twenty times. Cognac says "a session happened"; champagne says "this is the one you're looking at", exactly once per screen. |
 
 ---
 
@@ -163,6 +166,20 @@ minimum is too small for someone mid-set.
 | `primaryAction` | 88dp | The one primary action, full-bleed |
 | `targetGap` | 12dp | Minimum gap, so a sloppy tap can't hit two things |
 
+Two shared measurements sit alongside them, because two screens draw the same
+exercise slot — the roll reveals it, History replays it — and they have to agree
+by reading one number rather than by coincidence:
+
+| Token | Value | |
+|---|---|---|
+| `slot` | 72dp | Height of a slot's head row |
+| `intensityColumn` | 104dp | Width of the intensity column, fixed so the divider lands at the same x on every card |
+
+**The floor is why History's calendar isn't tappable.** Seven columns inside the
+gutters leaves about 47dp a cell. A grid you can tap is a grid that asks for the
+precise press VISION.md says tired hands don't have, so the month is a map and
+the moving is done by the swipe and by two 131dp compartments at the bottom.
+
 ---
 
 ## The mark
@@ -242,9 +259,11 @@ lib/theme/
   app_palette.dart      the ONLY place hex literals live
   app_colors.dart       SweatColors — roles ColorScheme has no slot for
   app_typography.dart   TextTheme, SweatTextStyles, MetricText
-  app_spacing.dart      spacing, radii, touch-target floors
+  app_spacing.dart      spacing, radii, touch-target floors, shared slot sizes
   app_theme.dart        SweatTheme.dark + context.sweatColors / .sweatText
   brand/plate_wheel.dart  the mark
+lib/app/ui/
+  action_pill.dart      the one fixed control, shared by both screens
 tool/generate_icons.dart  rasterises every icon (not run by CI)
 assets/fonts/             Bebas Neue + Chivo
 ```
@@ -300,13 +319,37 @@ a marker, and how the result is revealed.
   committed to the repo. Note that those clips would be placeholders chosen by
   whoever implements it, not by the app's owner.
 
+### Storage — designed, and deliberately dull
+
+Sessions are JSON lines under the app support directory: an append-only
+`sessions.jsonl` that is never rewritten, plus a small `session.live.json` for
+the one session under way, rewritten atomically on each phase change. A record
+is ~250 bytes and a year gzips to under 6KB, which is the "compresses well" part
+of the brief and also what makes the later cloud upload cheap. The reasoning,
+the failure modes and the schema-version rules are all in
+[lib/history/data/session_record.dart](lib/history/data/session_record.dart) and
+[session_store.dart](lib/history/data/session_store.dart).
+
+Two rules that are load-bearing rather than incidental:
+
+- **A slot the roll didn't fill is not in the file at all.** VISION.md rolls 2
+  *or* 3 pools, so an empty third slot is the app working. Anything that tints,
+  counts or scores a slot keys off `SlotOutcome.isShortfall`, never off the enum
+  identity, so a two-pool day can never be rendered as a miss.
+- **The reward colour follows that rule too.** A clean two-pool day gets the
+  same cognac disc on the calendar as a clean three-pool one.
+
+**Open:** whether an interrupted session should offer to *resume* rather than be
+recorded as abandoned at the next launch — and if so, for how long afterwards.
+Recovery is what's built; the format supports either with no migration.
+
 ### Everything downstream — not designed
 
 Movement pools, the hybrid anchor model, weekly volume targets, RIR capture,
-casual-vs-hardcore configuration, persistence. [VISION.md](VISION.md) is the
-source for all of it; none of it has been designed yet. `SweatColors` names the
-movement-pool tints and the RIR effort ramp as its expected next additions, but
-neither has fields or values.
+casual-vs-hardcore configuration. [VISION.md](VISION.md) is the source for all
+of it; none of it has been designed yet. `SweatColors` names the movement-pool
+tints and the RIR effort ramp as its expected next additions, but neither has
+fields or values.
 
 One of those rules has a visual consequence worth flagging early: VISION.md
 rule 4 asks the app to *teach* — "help people learn more about what is and isn't

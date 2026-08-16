@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sweat_roulette/app/app.dart';
 import 'package:sweat_roulette/app/providers.dart';
+import 'package:sweat_roulette/history/data/session_record.dart';
+import 'package:sweat_roulette/history/data/session_store.dart';
 import 'package:sweat_roulette/home/state/roll_session.dart';
 import 'package:sweat_roulette/theme/app_spacing.dart';
 import 'package:sweat_roulette/theme/app_typography.dart';
@@ -19,15 +21,21 @@ const _intensities = {'Heavy', 'Normal', 'Light'};
 const _pools = {'PUSH', 'PULL', 'LEG PUSH', 'LEG PULL', 'CORE'};
 
 void main() {
+  late MemorySessionStore store;
+
   Future<void> pumpApp(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    store = MemorySessionStore();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           appVersionProvider.overrideWithValue('1.2.3'),
           prefsProvider.overrideWithValue(prefs),
+          // In memory, and — deliberately — timerless: the real store debounces
+          // its writes, and a pending `Timer` fails a widget test's teardown.
+          sessionStoreProvider.overrideWithValue(store),
         ],
         child: const SweatRouletteApp(),
       ),
@@ -45,8 +53,7 @@ void main() {
 
   /// Rest gaps that are actually a rest — idle or already served. The live one
   /// shows a countdown instead, so it isn't counted here.
-  int restBars() =>
-      find.text('REST · ${kRestSeconds}s').evaluate().length;
+  int restBars() => find.text('REST · ${kRestSeconds}s').evaluate().length;
 
   /// Filled cards, counted by their intensity reel — every rolled exercise has
   /// exactly one, and a skipped slot has none. An expanded card still has
@@ -59,7 +66,7 @@ void main() {
   /// a skipped one.
   int dividers() => find.byKey(const Key('reel-divider')).evaluate().length;
 
-  int skipped() => find.text('Skipped today').evaluate().length;
+  int unrolled() => find.text('Not rolled').evaluate().length;
 
   /// The live rest's remaining seconds, or null when no rest is running.
   ///
@@ -135,7 +142,7 @@ void main() {
       expect(restBars(), 0);
 
       expect(cards(), 0);
-      expect(skipped(), 0);
+      expect(unrolled(), 0);
       expect(label(), 'ROLL');
     });
 
@@ -195,21 +202,35 @@ void main() {
     ) async {
       await pumpApp(tester);
 
-      for (final (row, title) in const [
-        (Key('nav-history'), 'History'),
-        (Key('nav-exercises'), 'Exercises'),
-        (Key('nav-config'), 'Config'),
-      ]) {
+      // History has no AppBar: like the roll screen, its way back is the left
+      // compartment of the bottom pill, so the affordance is in the place the
+      // thumb already knows. The two undesigned screens still carry a bar, and
+      // are still reached and left the ordinary way.
+      final destinations = <(Key, Finder, Future<void> Function())>[
+        (
+          const Key('nav-history'),
+          find.byKey(const Key('history-back')),
+          () => tester.tap(find.byKey(const Key('history-back'))),
+        ),
+        (
+          const Key('nav-exercises'),
+          find.text('Exercises'),
+          () => tester.pageBack(),
+        ),
+        (const Key('nav-config'), find.text('Config'), () => tester.pageBack()),
+      ];
+
+      for (final (row, marker, goBack) in destinations) {
         await tapInSheet(tester, row);
-        expect(find.text(title), findsOneWidget, reason: title);
+        expect(marker, findsOneWidget, reason: '$row');
 
         // Back returns to the roll screen rather than rebuilding it.
-        await tester.pageBack();
+        await goBack();
         await tester.pumpAndSettle();
         expect(
           find.byKey(const Key('primary-action')),
           findsOneWidget,
-          reason: title,
+          reason: '$row',
         );
       }
     });
@@ -275,7 +296,7 @@ void main() {
 
       expect(label(), 'START');
       expect(cards(), anyOf(2, 3));
-      expect(cards() + skipped(), 3);
+      expect(cards() + unrolled(), 3);
     });
 
     testWidgets('SKIP lands the whole day at once', (tester) async {
@@ -288,7 +309,7 @@ void main() {
       expect(label(), 'START');
       expect(ghostCards(), 0);
       expect(cards(), anyOf(2, 3));
-      expect(cards() + skipped(), 3);
+      expect(cards() + unrolled(), 3);
     });
 
     testWidgets('the reels do not outlive the screen', (tester) async {
@@ -316,7 +337,7 @@ void main() {
       // VISION.md rolls 2 or 3 pools. A short day leaves the third slot in
       // place saying it was skipped, rather than shortening the screen.
       expect(cards(), anyOf(2, 3));
-      expect(cards() + skipped(), 3);
+      expect(cards() + unrolled(), 3);
 
       // A skipped slot has no reels to spin, so it carries no divider.
       expect(dividers(), cards());
@@ -429,7 +450,7 @@ void main() {
       expect(find.text('Image'), findsOneWidget);
 
       // Expanding a card must not change how many cards there are.
-      expect(cards() + skipped(), 3);
+      expect(cards() + unrolled(), 3);
       expect(dividers(), cards());
     });
 
@@ -576,7 +597,7 @@ void main() {
       // the action starts the next one rather than emptying the screen first.
       expect(label(), 'ROLL');
       expect(find.text('How to'), findsNothing);
-      expect(cards() + skipped(), 3);
+      expect(cards() + unrolled(), 3);
       expect(ghostCards(), 0);
 
       await tapPrimary(tester);
@@ -599,9 +620,158 @@ void main() {
         expect(ghostCards(), 3, reason: '$taps taps in');
         expect(label(), 'ROLL');
         expect(cards(), 0);
-        expect(skipped(), 0);
+        expect(unrolled(), 0);
         expect(restBars(), 0);
         expect(ghostRests(), 2);
+      }
+    });
+  });
+
+  group('what the day leaves behind', () {
+    testWidgets('a day walked to FINISH is recorded, every slot done', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await beginSession(tester);
+
+      while (label() != 'FINISH') {
+        await tapPrimary(tester);
+      }
+      await tapPrimary(tester);
+
+      expect(store.records, hasLength(1));
+      final record = store.records.single;
+
+      expect(record.outcome, SessionOutcome.finished);
+      expect(record.day, dayOf(DateTime.now()));
+      expect(record.isComplete, true);
+      expect(
+        record.slots.every((s) => s.outcome == SlotOutcome.completed),
+        true,
+      );
+
+      // Nothing half-written left over for the next launch to recover.
+      expect(store.inFlight, isNull);
+    });
+
+    testWidgets('the open card offers a way to say you couldn’t do it', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+
+      // Only on the card being worked on: there is nothing to bail on before
+      // a session starts.
+      await tapPrimary(tester);
+      expect(find.byKey(const Key('skip-exercise')), findsNothing);
+
+      await tapPrimary(tester);
+      expect(find.byKey(const Key('skip-exercise')), findsOneWidget);
+
+      // Still a fair target after a set, even though it rides at the top of the
+      // screen with the open card.
+      expect(
+        tester.getSize(find.byKey(const Key('skip-exercise'))).height,
+        greaterThanOrEqualTo(SweatSize.minTarget),
+      );
+    });
+
+    testWidgets('bailing marks the slot and moves the session on in one tap', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await beginSession(tester);
+
+      // The strip is at the foot of the open card, which on this surface is
+      // taller than the viewport — the same scroll a thumb would do.
+      await tester.ensureVisible(find.byKey(const Key('skip-exercise')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('skip-exercise')));
+      await tester.pumpAndSettle();
+
+      // One tap: the card has closed and the day has moved past it, exactly as
+      // NEXT would have.
+      expect(find.byKey(const Key('skip-exercise')), findsNothing);
+      expect(label(), 'NEXT');
+
+      while (label() != 'FINISH') {
+        await tapPrimary(tester);
+      }
+      await tapPrimary(tester);
+
+      final record = store.records.single;
+      expect(record.slots.first.outcome, SlotOutcome.skipped);
+      expect(record.shortfalls, 1);
+      expect(record.isComplete, false);
+    });
+
+    testWidgets('a two-pool day is recorded as complete, not as a miss', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+
+      // Roll until the day comes up short. VISION.md rolls 2 *or* 3 pools, so
+      // the empty third slot is the app working — it must not be recorded as
+      // something the day fell short of.
+      for (var attempt = 0; attempt < 40; attempt++) {
+        await tapPrimary(tester); // ROLL
+        await tapPrimary(tester); // SKIP the reels
+        if (unrolled() == 1) break;
+        await tapReset(tester);
+      }
+      expect(unrolled(), 1, reason: '40 rolls never came up short');
+
+      await tapPrimary(tester); // START
+      while (label() != 'FINISH') {
+        await tapPrimary(tester);
+      }
+      await tapPrimary(tester);
+
+      final record = store.records.single;
+      expect(record.slots, hasLength(2));
+      expect(record.slotCount, 3);
+      expect(record.outcomeAt(2), SlotOutcome.notRolled);
+      expect(record.shortfalls, 0);
+      expect(record.isComplete, true);
+    });
+
+    testWidgets('a session left half-done is on the disk as it stood', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await beginSession(tester);
+      await tapPrimary(tester); // into the first rest
+      await tapPrimary(tester); // begin the second exercise
+
+      // The app is killed here. Nothing is committed, but the live session is
+      // already written — with the tail honestly unreached.
+      expect(store.records, isEmpty);
+
+      final live = store.inFlight!;
+      expect(live.outcome, SessionOutcome.running);
+      expect(live.slots.first.outcome, SlotOutcome.completed);
+
+      // Neither a tick nor a cross on the one that was open — the app does not
+      // know how it went, and must not guess in either direction.
+      expect(live.slots[1].outcome, SlotOutcome.inProgress);
+      expect(live.slots[1].outcome.isShortfall, false);
+      expect(live.abandoned().isComplete, false);
+    });
+
+    testWidgets('the seed tile fills History without a real session', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      expect(store.records, isEmpty);
+
+      await tapInSheet(tester, const Key('seed-history'));
+      await tester.pumpAndSettle();
+
+      expect(store.records, isNotEmpty);
+      // Placeholder days only — nothing invented outside the sample list.
+      for (final record in store.records) {
+        for (final slot in record.slots) {
+          expect(sampleNames, contains(slot.name));
+        }
       }
     });
   });

@@ -169,7 +169,7 @@ void main() {
       expect(read().revealSteps, 4);
 
       notifier().advance(); // SKIP
-      expect(read().statusOf(2), SlotStatus.skipped);
+      expect(read().statusOf(2), SlotStatus.unrolled);
       // The gap above it comes up empty rather than as an interval — there is
       // nothing after it to rest before.
       expect(read().restStatusAt(2), RestStatus.ghost);
@@ -194,7 +194,7 @@ void main() {
 
       // The skip lands, and the gap goes with it rather than waiting for a
       // turn of its own.
-      expect(at(3).statusOf(2), SlotStatus.skipped);
+      expect(at(3).statusOf(2), SlotStatus.unrolled);
       expect(at(3).restStatusAt(2), RestStatus.ghost);
 
       // The real gap is still to come — it is the last thing in the run.
@@ -339,7 +339,7 @@ void main() {
     test('a skipped slot gets a ghost rest, not a live one', () {
       rollDayOf(2);
 
-      expect(read().statusOf(2), SlotStatus.skipped);
+      expect(read().statusOf(2), SlotStatus.unrolled);
       // The gap above a slot that never happens holds its height and says
       // nothing — it is never a rest, in any phase.
       expect(read().restStatusAt(2), RestStatus.ghost);
@@ -351,7 +351,7 @@ void main() {
       notifier().advance(); // exercise 2
       notifier().advance(); // FINISH
       expect(read().restStatusAt(2), RestStatus.ghost);
-      expect(read().statusOf(2), SlotStatus.skipped);
+      expect(read().statusOf(2), SlotStatus.unrolled);
     });
 
     test('reset returns to clear from every phase', () {

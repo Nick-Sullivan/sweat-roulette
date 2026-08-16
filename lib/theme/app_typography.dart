@@ -246,7 +246,13 @@ class SweatTextStyles extends ThemeExtension<SweatTextStyles> {
 /// Bebas has no lowercase, so a unit typed into the value string comes out as
 /// `87.5 KG`.
 class MetricText extends StatelessWidget {
-  const MetricText(this.value, {this.unit, this.small = false, this.color, super.key});
+  const MetricText(
+    this.value, {
+    this.unit,
+    this.small = false,
+    this.color,
+    super.key,
+  });
 
   final String value;
   final String? unit;

@@ -46,7 +46,10 @@ void main() {
     };
 
     pairs.forEach((name, pair) {
-      test(name, () => expect(_ratio(pair.$1, pair.$2), greaterThanOrEqualTo(4.5)));
+      test(
+        name,
+        () => expect(_ratio(pair.$1, pair.$2), greaterThanOrEqualTo(4.5)),
+      );
     });
   });
 
@@ -64,7 +67,10 @@ void main() {
     };
 
     pairs.forEach((name, pair) {
-      test(name, () => expect(_ratio(pair.$1, pair.$2), greaterThanOrEqualTo(3.0)));
+      test(
+        name,
+        () => expect(_ratio(pair.$1, pair.$2), greaterThanOrEqualTo(3.0)),
+      );
     });
   });
 

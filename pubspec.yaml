@@ -16,6 +16,10 @@ dependencies:
   go_router: ^17.0.0
   shared_preferences: ^2.5.3
   package_info_plus: ^9.0.1
+  # Only ever called from main() — it resolves the one directory the session log
+  # lives in. Keeping it out of the rest of lib/ is what lets the whole storage
+  # layer be tested without standing up a platform channel.
+  path_provider: ^2.1.5
   # Not used directly — Flutter's Cupertino widgets reference this font family,
   # and its absence makes every release build emit a missing-font warning.
   cupertino_icons: ^1.0.8
