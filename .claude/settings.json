@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flutter analyze *)"
+      "Bash(flutter analyze *)",
+      "Bash(flutter test *)",
+      "Bash(dart format *)",
+      "Bash(flutter build *)",
+      "PowerShell(flutter analyze 2>&1)",
+      "PowerShell(flutter test 2>&1)",
+      "PowerShell(flutter run -d emulator-5554 2>&1)"
     ]
   }
 }

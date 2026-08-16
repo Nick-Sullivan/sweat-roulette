@@ -1,18 +1,18 @@
 This app is to randomise daily workout routines. The aim is to increase attendance by reducing decision paralysis and boredom.
 There are a few key rules to keep the workouts effective even with randomisation.
 
-Rule 1: Constrain the Movement Pools
-Do not pick completely arbitrary exercises. Categorize movements into fundamental biomechanical patterns and randomly select one exercise per pool (e.g. push pool, pull pool)
+The randomness follows the guidelines:
+- There are five pools push/pull/leg push/leg pull/core
+- Each workout day will randomly select whether to do 2 or 3 pools in the day
+- Those many pools are selected in random order
+- For each pool, an exercise from each pool is randomly selected
+- The exercises will be random between heavy/low rep or regular or light/high rep. The target will always be to hit 1-3 Reps in reserve (RIR)
+- Random rest interval between the exercises
 
-Rule 2: Match Weekly Volume Targets
-Ensure that overall weekly volume remains structured. Aim for 10–20 total working sets per muscle group per week, regardless of which daily exercises you roll.
-
-Rule 3: Standardize Effort (1–3 RIR)
-Because weight loads will vary randomly daily, rely on Reps in Reserve (RIR) rather than fixed weight targets. End every working set 1 to 3 reps short of muscular failure.
-
-Rule 4: Use a "Hybrid" Anchor Model (Recommended)
-Keep 1 major compound lift fixed for each workout day (e.g., always start Leg Day with a Squat variation to build baseline strength and track overload), and randomize all secondary/isolation exercises.
-
+What should not be randomised
+- Effort should always hit 1-3 RIR
+- Weekly volume of sets per muscle group
+- Warm up set
 
 And for user interaction, there are also rules:
 
@@ -22,8 +22,20 @@ Rule 2: The randomness should be fun. Following other gambling-based games where
 
 Rule 3: Keep things simple and clean. Peoples hands will be tired so don't expect the ability for precise button presses.
 
+Rule 4: Doing this should help people learn more about what is and isn't good and healthy.
+
 
 For data:
 
 Rule 1: All data lives on the users phone, there will later be an option to also upload it to the cloud when connection becomes available, but for now the phone is the one and only source.
 
+
+
+Screens
+- Daily randomise
+- History
+- Exercise list
+- Config (include/exclude exercises, whether to record or not record weights, reps etc., level of exercise detail info)
+
+Claude:
+- NEVER MAKE ANY DECISIONS REGARDING BIOLOGY, YOU KNOW NOTHING ABOUT MUSCLES, WORKOUTS, OR BIOLOGY. YOU ARE HERE FOR CODING ONLY.
